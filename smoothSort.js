@@ -12,14 +12,11 @@ License: MIT
 
 /* Todo:
  - When scaled, height-scaledHeight... get top offset and use
- - Manual scroll while draging should work
- - In getItemIndex, return the index within "opt.container.children(opt.itemSelector)" and not just all children
  - Rework away jQuery dependency.
- - Readme
- - GitHub
  - Bower
  - Ember..?
-*/ 
+ - Possible padding issue when applied to scrollContainer, affecting switch edge
+*/
 
 /* Usage:
   See the first sections in the code for
@@ -49,9 +46,9 @@ License: MIT
   3. Profit.
 */
 
-
-
 (function ($) {
+  'use strict';
+
   $.fn.smoothSort = function(options) {
 
     // Options
@@ -60,14 +57,14 @@ License: MIT
       containerScale:1,
       dragActiveClass:'drag-active',
       scrollContainer:$(this).parent(),
-      scrollDistance:100, // distance from top/bottom of scrollContainer, to activate autoScroll
-      scrollSpeed:10,
+      scrollDistance:100, // px distance from top/bottom of scrollContainer, to activate autoScroll, or false
+      scrollSpeed:10, // max nr of px/50ms
+      scrollIntoViewDuration:700, // ms | false
       itemSelector:'li',
-      dragItemMaxHeight:100,
+      dragItemMaxHeight:100, // px
       dragItemClass:'moving',
       handleSelector:'.handle',
-      handleTopMargin:20,
-      shouldPutIntoPlace:'animated', // true,false,'animated'
+      shouldPutIntoPlace:'animated', // true | false | 'animated'
       cssResetAnimationDelay:700, // if you got css like
       // li.putting-into-place {transition:max-height 700ms, transform 0.23s ease-out;}
       // then set to longest duration (in this case 700ms)
@@ -82,19 +79,20 @@ License: MIT
     // Callable functions
     // (defined in "Functions" section)
     opt.putIntoPlace = null;
-    
+
     // Read only variables
     opt.dragItem = null;
     opt.dragStartPosition       = { x:0, y:0 };
     opt.dragAbsolutePosition    = { x:0, y:0 };
     opt.dragDeltaTransform      = { x:0, y:0 };
+    opt.handleMargin            = { x:0, y:0 };
     opt.dragItemInitialHeight   = 0;
     opt.dragItemOriginalIndex   = null;
     opt.dragItemVirtualIndex    = null;
 
     opt.containerStartPosition  = { x:0, y:0 };
     opt.containerStartSize      = { w:0, h:0 };
-    
+
     opt.scrollOffset            = { x:0, y:0 };
     opt.scrollContainerPosition = { x:0, y:0 };
     opt.scrollContainerSize     = { w:0, h:0 };
@@ -117,37 +115,38 @@ License: MIT
       opt.scrollOffset.x = opt.scrollContainer.scrollLeft();
       opt.scrollOffset.y = opt.scrollContainer.scrollTop();
 
-      var containerOffset = opt.scrollContainer.offset();
+      var containerOffset = opt.scrollContainer.offset() || {top:0,left:0};
       opt.scrollContainerPosition.x = containerOffset.left;
       opt.scrollContainerPosition.y = containerOffset.top;
       opt.scrollContainerSize.w = opt.scrollContainer.width();
       opt.scrollContainerSize.h = opt.scrollContainer.height();
-      opt.scrollContainerSize.h = Math.min(opt.scrollContainerSize.h, document.body.clientHeight - opt.scrollContainerPosition.y);
+      opt.scrollContainerSize.h = Math.min(opt.scrollContainerSize.h, Math.max(document.body.clientHeight, window.innerHeight) - opt.scrollContainerPosition.y);
       
-      containerOffset = opt.container.offset();
+      containerOffset = opt.container.offset(); // Non-jQuery: getOffsetToParent(opt.container.get(0), opt.scrollContainer.get(0)).x/.y
       opt.containerStartPosition.x = containerOffset.left;
       opt.containerStartPosition.y = containerOffset.top;
       opt.containerStartSize.w = opt.container.width();
       opt.containerStartSize.h = opt.container.height();
-      
+
       // Transform scale
       if (opt.containerScale!==1&&opt.containerScale!==false) {
         opt.container.css('transform-origin', 'center '+opt.dragStartPosition.y+'px');
         opt.container.css('transform', 'scale('+opt.containerScale+', '+opt.containerScale+')');
       }
-      
+
       // Constrain dragItem height
       opt.dragItemInitialHeight = opt.dragItem.height();
-      opt.dragItem.css('max-height', opt.dragItemInitialHeight);
+      opt.dragItem.css('max-height', opt.dragItemInitialHeight+'px');
       setTimeout(function() {
         // If just a click, dragEnd could be called before timeout
-        if (!opt.dragItem) return;
+        if (!opt.dragItem) {return;}
         // Animate constrained height
-        opt.dragItem.css('max-height', opt.dragItemMaxHeight);
+        opt.dragItem.css('max-height', opt.dragItemMaxHeight+'px');
       }, 0);
-      
+
       // Auto scroll
-      opt.scrollIntervalId = setInterval(autoScroll, 50);
+      if (opt.scrollDistance)
+        opt.scrollIntervalId = setInterval(autoScroll, 50);
 
       // Notify
       opt.dragStart();
@@ -155,13 +154,13 @@ License: MIT
 
     var dragMove = function (absolutePosition) {
       opt.dragAbsolutePosition.x = absolutePosition.x;
-      opt.dragAbsolutePosition.y = Math.min(absolutePosition.y, opt.containerStartSize.h-opt.dragItemInitialHeight);
-      opt.dragAbsolutePosition.y = Math.max(opt.dragAbsolutePosition.y, opt.scrollContainerPosition.y+opt.handleTopMargin);
+      opt.dragAbsolutePosition.y = Math.min(absolutePosition.y, opt.containerStartSize.h-opt.dragItemInitialHeight+opt.handleMargin.y+opt.containerStartPosition.y);
+      opt.dragAbsolutePosition.y = Math.max(opt.dragAbsolutePosition.y, opt.scrollContainerPosition.y+opt.handleMargin.y+opt.containerStartPosition.y);
 
       var p = {};
       p.x = opt.dragAbsolutePosition.x-opt.dragStartPosition.x;
       p.y = opt.dragAbsolutePosition.y-opt.dragStartPosition.y;
-      
+
       // Update values
       var dragItemHeight = Math.min(opt.dragItemInitialHeight, opt.dragItemMaxHeight);
       var dragItemTop = opt.dragItem.position().top;
@@ -205,7 +204,7 @@ License: MIT
           // Save "delta" for later
           if (translateY)
             opt.dragDeltaTransform.y += itemHeight*(translateY);
-      
+
           // Translate sibling
           item.css('transform', translateY?'translate3D(0,'+Math.round(translateY*(dragItemHeight+1))+'px,0)':'');
 
@@ -218,17 +217,17 @@ License: MIT
             break;
         }
       }
-      
+
       // Only if moved in a direction
       if (p.y!==0)
         translateSiblings(p.y<0);
-      
+
       // Take scale into account
       if (opt.containerScale!==1&&opt.containerScale!==false) {
         p.x /= opt.containerScale;
         p.y /= opt.containerScale;
       }
-      
+
       // Transform move dragItem
       opt.dragItem.css('transform', 'translate3D(0,'+Math.round(p.y)+'px,0)');
 
@@ -237,9 +236,10 @@ License: MIT
     };
 
     var dragEnd = function () {
-      
+
       // Stop auto scroll
-      clearInterval(opt.scrollIntervalId);
+      if (opt.scrollIntervalId)
+        clearInterval(opt.scrollIntervalId);
 
       // Know if things should be handled with animation
       var putAnimated = opt.shouldPutIntoPlace=='animated';
@@ -247,13 +247,13 @@ License: MIT
       // Reset classes
       opt.dragItem.removeClass(opt.dragItemClass);
       opt.container.removeClass(opt.dragActiveClass);
-      
+
       // Scale back to normal
       if (opt.containerScale!==1&&opt.containerScale!==false) {
         opt.container.css('transform', '');
         //opt.container.css('transform-origin', '');
       }
-      
+
       // Reset siblings transform
       //opt.dragItem.css('transform', '');
       opt.container.children(opt.itemSelector).each(function (index,item) {
@@ -276,20 +276,53 @@ License: MIT
       if (opt.shouldPutIntoPlace) {
         opt.putIntoPlace(putAnimated);
       }
-      
+
       // Remove height constraint
       if (!putAnimated) {
         opt.dragItem.css('max-height', '');
       } else {
         opt.dragItem.addClass('putting-into-place');
         setTimeout(function(dragItem, height) {
-          dragItem.css('max-height', height);
+          dragItem.css('max-height', height+'px');
           dragItem.css('transform', '');
         }, 0, opt.dragItem, opt.dragItemInitialHeight);
         setTimeout(function(dragItem) {
           dragItem.css('max-height', '');
           dragItem.removeClass('putting-into-place');
         }, opt.cssResetAnimationDelay, opt.dragItem);
+
+        // Scroll item visible if put out of vision
+        (function scrollItemIntoViewAnimated(duration) {
+          if (duration===false) return;
+
+          var scrollDelta = {x:0,y:0};
+          var scrollContainerEdge = getScrollContainerInsideEdge();
+          var edgeMargin = (scrollContainerEdge.bottom-scrollContainerEdge.top)*0.1;
+
+          // Get item's new position
+          var pos = {x:0,y:0};
+          pos.y  = opt.dragAbsolutePosition.y-opt.dragStartPosition.y+opt.dragDeltaTransform.y;
+          pos.y -= opt.dragAbsolutePosition.y;
+          pos.y += opt.handleMargin.y;//+opt.containerStartPosition.y
+          pos.y *= -1;
+
+          // Get altered scrollOffset
+          if ((scrollDelta.y = scrollContainerEdge.top-pos.y )>0)
+            opt.scrollOffset.y -= scrollDelta.y + edgeMargin;
+          else if ((scrollDelta.y = pos.y+opt.dragItemInitialHeight-scrollContainerEdge.bottom )>0)
+            opt.scrollOffset.y += scrollDelta.y + edgeMargin;
+          
+          // Do the scrolling animation
+          if (scrollDelta.y>0) {
+            // Get scrollingElement (.animate scrollTop doesn't
+            // work on document, but document.scrollingElement)
+            var scrollingElement = opt.scrollContainer.get(0).scrollingElement;
+            scrollingElement = (typeof scrollingElement === "object")?$(scrollingElement):opt.scrollContainer;
+            scrollingElement.animate({
+              scrollTop: opt.scrollOffset.y
+            }, duration);9
+          }
+        })(opt.scrollIntoViewDuration);
       }
 
       // Notify
@@ -297,45 +330,52 @@ License: MIT
       opt.dragItem = null;
       opt.dragItemVirtualIndex = null;
     };
-    
+
 
     // Functions
 
-    function autoScroll() {   
+    function getScrollContainerInsideEdge() {
+      return {
+        top:opt.scrollContainerPosition.y+opt.scrollOffset.y,
+        bottom:opt.scrollContainerPosition.y+opt.scrollContainerSize.h+opt.scrollOffset.y
+      }
+    }
 
-      // Vars   
+    function autoScroll() {
+
+      // Vars
       var scrollDelta = {x:0,y:0};
-      var scrollContainerInsideBottom = opt.scrollContainerPosition.y+opt.scrollContainerSize.h+opt.scrollOffset.y;
-      var scrollContainerInsideTop = opt.scrollContainerPosition.y+opt.scrollOffset.y;
-      
-      var insideScrollZoneBottom = (opt.dragAbsolutePosition.y+opt.scrollDistance)-scrollContainerInsideBottom;
-      var insideScrollZoneTop = (opt.scrollDistance+scrollContainerInsideTop)-opt.dragAbsolutePosition.y;
-      
+      var scrollContainerEdge = getScrollContainerInsideEdge();
+      var insideScrollZone = {
+        top:    (opt.scrollDistance+scrollContainerEdge.top) - opt.dragAbsolutePosition.y,
+        bottom: opt.dragAbsolutePosition.y - (scrollContainerEdge.bottom-opt.scrollDistance)
+      }
+
       // Faster scroll if closer to the edge
       function scrollDeltaFromScrollDistance(distance) {
         var p = distance/opt.scrollDistance;
         return p*opt.scrollSpeed*2;
       }
-      
-      // If insideScrollZoneBottom
-      if (insideScrollZoneBottom>0) {
-        if (opt.scrollContainerSize.h+opt.scrollOffset.y<opt.containerStartSize.h*opt.containerScale)
-          scrollDelta.y = scrollDeltaFromScrollDistance(insideScrollZoneBottom);
 
-      // Or if insideScrollZoneTop
-      } else if (insideScrollZoneTop>0) {
+      // If insideScrollZone.bottom
+      if (insideScrollZone.bottom>0) {
+        if (opt.scrollContainerSize.h+opt.scrollOffset.y<opt.containerStartSize.h*opt.containerScale)
+          scrollDelta.y = scrollDeltaFromScrollDistance(insideScrollZone.bottom);
+
+      // Or if insideScrollZone.top
+      } else if (insideScrollZone.top>0) {
         if (opt.scrollOffset.y>0)
-          scrollDelta.y = -scrollDeltaFromScrollDistance(insideScrollZoneTop);
+          scrollDelta.y = -scrollDeltaFromScrollDistance(insideScrollZone.top);
 
       // Otherwhise, no auto scroll should be executed
       } else {
         return;
       }
-      
+
       // Update values
       opt.scrollOffset.y += scrollDelta.y;
       opt.scrollContainer.scrollTop(opt.scrollOffset.y);
-      
+
       // Stimulate a move, so interface changes
       dragMove({
         x:opt.dragAbsolutePosition.x+scrollDelta.x,
@@ -343,9 +383,20 @@ License: MIT
       });
     }
 
+    // Returns the item's index in the list of items (a subset of
+    // opt.container's children defined by the opt.itemSelector).
+    // Usually the same as item.index(), but sometimes different.
     function getItemIndex(item) {
-      //var children = opt.container.children(opt.itemSelector)
-      return item.index();
+      var item = item.get(0);
+      var children = opt.container.children(opt.itemSelector);
+      var index = -1;
+      children.each(function (i, child) {
+        if (child===item) {
+          index = i;
+          return false;
+        }
+      })
+      return index;
     }
 
     opt.putIntoPlace = function (animated) {
@@ -370,7 +421,7 @@ License: MIT
 
 
     // Helper
-    
+
     function getMousePosition(e) {
 
       // Different browsers
@@ -391,6 +442,17 @@ License: MIT
       return p;
     }
 
+    function getOffsetToParent(el, parent) {
+      var offset = {x:0,y:0};
+      while ( el && !isNaN(el.offsetLeft) && !isNaN(el.offsetTop) ) {
+        offset.x += el.offsetLeft - el.scrollLeft;
+        offset.y += el.offsetTop - el.scrollTop;
+        if (parent=== (el = el.offsetParent) )
+          break;
+      }
+      return offset;
+    }
+
     function getItemFromHandle(p) {
 
       // Drag handle is inside
@@ -407,7 +469,12 @@ License: MIT
     $(opt.container).on('mousedown', opt.itemSelector+' '+opt.handleSelector, function (e) {
       var item = getItemFromHandle($(this));
       if (!item) return;
-      
+
+      opt.handleMargin = {
+        x:e.offsetX,
+        y:e.offsetY
+      };
+
       e.preventDefault();
       var p = getMousePosition(e);
       dragStart(item, p);
@@ -416,10 +483,27 @@ License: MIT
     $(document).mousemove(function (e) {
       if (!opt.dragItem)
         return;
-      
+
       e.preventDefault();
       var p = getMousePosition(e);
       dragMove(p);
+    });
+
+    $(opt.scrollContainer).scroll(function () {
+      if (!opt.dragItem)
+        return;
+
+      // Update values
+      var scrollDelta = {
+        x:-opt.scrollOffset.x + ( opt.scrollOffset.x = opt.scrollContainer.scrollLeft() ),
+        y:-opt.scrollOffset.y + ( opt.scrollOffset.y = opt.scrollContainer.scrollTop() )
+      };
+
+      // Stimulate a move, so interface changes
+      dragMove({
+        x:opt.dragAbsolutePosition.x+scrollDelta.x,
+        y:opt.dragAbsolutePosition.y+scrollDelta.y
+      });
     });
 
     $(document).mouseup(function () {
@@ -432,7 +516,7 @@ License: MIT
     opt.iDragMove = dragMove;
 
     opt.didInit();
- 
+
     // Done
 
     return this;
