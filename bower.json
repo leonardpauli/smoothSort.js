@@ -1,0 +1,28 @@
+{
+  "name": "smoothSort.js",
+  "main": "smoothSort.js",
+  "homepage": "https://github.com/LeonardPauli/smoothSort.js",
+  "version": "1.0.0",
+  "authors": [
+    "Leonard Pauli <leonardpauli@me.com>"
+  ],
+  "description": "Adds smooth drag-n-drop sorting to any HTML list with a simple call",
+  "moduleType": [
+    "globals"
+  ],
+  "keywords": [
+    "js",
+    "list",
+    "smooth",
+    "sort",
+    "sorting",
+    "drag",
+    "drop",
+    "interactive"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "demo.html"
+  ]
+}
