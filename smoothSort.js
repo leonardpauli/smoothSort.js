@@ -211,7 +211,6 @@ License: MIT
           itemEdge+= itemHeight/2; // Get middle
           // Turn on top/bottom (depending on prev) instead of middle, if item is smaller than dragItem OR ALWAYS
           itemEdge+= dragItemHeight/2 *(prev?1:-1) *(itemHeight<dragItemHeight*1.2 ||1)
-          console.log('A', itemEdge, itemTop, itemHeight, dragItemMiddle)
 
           // Figure out correct translation
           if (prev) {
