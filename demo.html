@@ -36,7 +36,9 @@
     li {
       display:block;
       position:relative;
-      
+      -margin:5px;
+      -padding: 20px;
+
       transition:box-shadow 0.6s, max-height 0.7s;
     }
     
@@ -55,7 +57,7 @@
     
     li.putting-into-place {
       z-index:100;
-      transition:box-shadow 0.6s, max-height 0.7s, transform 0.23s ease-out;
+      transition:box-shadow 0.6s, max-height 0.7s, transform 1.23s ease-out;
     }
     
     li .handle {
@@ -88,7 +90,7 @@
 <script>
 // Create list items
 for (var i = 14; i; i--) {
-  var h = Math.round(Math.random()*300)+50;
+  var h = Math.round(Math.random()*300)+50;h=i%2==0?60:120;
   var c = 'rgb(255,'+Math.round(17+(255-17)/16*(16-i))+','+Math.round(17+(255-17)/30*i)+')';
 
   $('<li>text<b class=handle>handle '+i+'</b></li>')
@@ -101,10 +103,18 @@ $('#ul').smoothSort({
   scrollContainer:$(document),
   scrollDistance:100, // distance from top/bottom of scrollContainer, to activate autoScroll
   scrollSpeed:15,
+  cssResetAnimationDelay:1230,
   dragEnd: function (item, fromIndex, toIndex) {
-    console.log('Drag ended!', item, fromIndex, toIndex)
+    //console.log('Drag ended!', item, fromIndex, toIndex)
   }
 });
+
+$(document).on('keydown', function (e) {
+          if (e.which==32) {
+            console.log("Pause");
+            e.preventDefault();
+          }
+        })
 </script>
 
 </body>

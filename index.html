@@ -4,9 +4,17 @@
   <title>Demo - smoothSort.js</title>
   <!-- Created by Leonard Pauli 2015-2016 -->
 
+  <meta charset="UTF-8">
+
   <script src="https://code.jquery.com/jquery-2.2.0.min.js"></script>
   <script src="jquery-2.1.1.min.js"></script><!-- offline's good -->
   <script src="smoothSort.js"></script>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+  <link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
 
   <style>
     /* Some style */
@@ -24,10 +32,11 @@
       transition:transform 0.5s;
     
       width:80%;
+      max-width: 1000px;
       background:#444;
-      margin:60px 0;
-      margin-left: 10%;
-      float: left;
+      margin:60px auto;
+      overflow: hidden;
+      border-radius: 3px;
     }
     
     ul.drag-active {
@@ -37,6 +46,10 @@
       display:block;
       position:relative;
       
+      height: 50px;
+      color: black;
+      padding: 30px;
+      margin: 50px;
       transition:box-shadow 0.6s, max-height 0.7s;
     }
     
@@ -78,12 +91,57 @@
     }
   </style>
 
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      color: white;
+    }
+    h1 {
+      margin-top:60px;
+      margin-bottom: 10px;
+    }
+    h1, h3 {
+      text-align:center;
+    }
+    h3 {
+      font-weight: 300;
+    }
+
+    li.gh {
+      background: #FAFAFA;
+    }
+    li.bower {
+      background: #543729;
+      color: rgba(255,255,255,0.8);
+    }
+    li.bower i {
+      color: white;
+      font-style: normal;
+      font-family: Consolas, Menlo, Courier, monospace;
+    }
+  </style>
+
 </head>
 <body>
 
-<div class="m" id="m1"></div>
+<h1>Sort things out smoothly.</h1>
+<h3>Adds smooth drag-n-drop sorting to any HTML list with a simple call.</h3>
 
-<ul id="ul"></ul>
+<ul id="ul">
+  <li class="gh">
+    View &#38; fork the code on <a href="https://github.com/LeonardPauli/smoothSort.js">GitHub</a>, or
+    <b class="handle">drag me!</b>
+  </li>
+  <li class="bower">
+    You can also <b class="handle">drag here</b> and do: &nbsp;&nbsp;<i>$ bower install smooth-sort</i>
+  </li>
+  <li>
+    It does currently requires jQuery, and some css, but other than that, it's just a simple call between you and that <b class="handle">smoothness</b>:
+  </li>
+  <li><pre class="handle">
+    $('ul').smoothSort();
+  </pre></li>
+</ul>
 
 <script>
 // Create list items
@@ -91,7 +149,7 @@ for (var i = 14; i; i--) {
   var h = Math.round(Math.random()*300)+50;
   var c = 'rgb(255,'+Math.round(17+(255-17)/16*(16-i))+','+Math.round(17+(255-17)/30*i)+')';
 
-  $('<li>text<b class=handle>handle '+i+'</b></li>')
+  $('<li>This is an item. <b class=handle>And this is a handle</b> that wants to be dragged. '+(14+1-i)+'</li>')
   .css('height', h+'px').css('background', c).appendTo('#ul');
 }
 

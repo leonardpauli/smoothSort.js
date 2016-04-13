@@ -16,6 +16,8 @@ License: MIT
  - Bower
  - Ember..?
  - Possible padding issue when applied to scrollContainer, affecting switch edge
+ - If initial drag is faster then next item move animation, next item could
+   get a somewhat off "initial position" value (used for switch edge)
 */
 
 /* Usage:
@@ -39,7 +41,7 @@ License: MIT
   2. Invoke smoothSort
   -  $('ul').smoothSort({
       containerScale:1,
-      dragEnd: function (item, fromIndex, toIndex) {
+      dragEnd: function (opt, item, fromIndex, toIndex) {
         console.log('Drag ended', item, fromIndex, toIndex)
       }
     });
@@ -61,8 +63,9 @@ License: MIT
       scrollSpeed:10, // max nr of px/50ms
       scrollIntoViewDuration:700, // ms | false
       itemSelector:'li',
-      dragItemMaxHeight:100, // px
+      dragItemMaxHeight:100, // px (including padding, excluding border and margin)
       dragItemClass:'moving',
+      dragItemTransformStyle:null, // null | 'scale(1.05,1.05)' (appended to 'translate3D(...) ')
       handleSelector:'.handle',
       shouldPutIntoPlace:'animated', // true | false | 'animated'
       cssResetAnimationDelay:700, // if you got css like
@@ -70,10 +73,10 @@ License: MIT
       // then set to longest duration (in this case 700ms)
 
       // Events
-      dragStart:function () {},
-      dragMove:function () {},
-      dragEnd:function (item, fromIndex, toIndex) {},
-      didInit:function () {}
+      dragStart:function (opt) {},
+      dragMove:function (opt) {},
+      dragEnd:function (opt, item, fromIndex, toIndex) {},
+      didInit:function (opt) {}
     }, options);
 
     // Callable functions
@@ -89,6 +92,8 @@ License: MIT
     opt.dragItemInitialHeight   = 0;
     opt.dragItemOriginalIndex   = null;
     opt.dragItemVirtualIndex    = null;
+    opt.dragItemInnerSpacing    = getInnerSpacing();
+    opt.dragItemOuterSpacing    = getOuterSpacing();
 
     opt.containerStartPosition  = { x:0, y:0 };
     opt.containerStartSize      = { w:0, h:0 };
@@ -110,7 +115,7 @@ License: MIT
 
       opt.container.addClass(opt.dragActiveClass);
       opt.dragItem.addClass(opt.dragItemClass);
-
+ 
       // Update values
       opt.scrollOffset.x = opt.scrollContainer.scrollLeft();
       opt.scrollOffset.y = opt.scrollContainer.scrollTop();
@@ -120,7 +125,8 @@ License: MIT
       opt.scrollContainerPosition.y = containerOffset.top;
       opt.scrollContainerSize.w = opt.scrollContainer.width();
       opt.scrollContainerSize.h = opt.scrollContainer.height();
-      opt.scrollContainerSize.h = Math.min(opt.scrollContainerSize.h, Math.max(document.body.clientHeight, window.innerHeight) - opt.scrollContainerPosition.y);
+      var windowHeight = window.innerHeight || document.documentElement.clientHeight;
+      opt.scrollContainerSize.h = Math.min(opt.scrollContainerSize.h, windowHeight - opt.scrollContainerPosition.y);
       
       containerOffset = opt.container.offset(); // Non-jQuery: getOffsetToParent(opt.container.get(0), opt.scrollContainer.get(0)).x/.y
       opt.containerStartPosition.x = containerOffset.left;
@@ -135,21 +141,30 @@ License: MIT
       }
 
       // Constrain dragItem height
-      opt.dragItemInitialHeight = opt.dragItem.height();
-      opt.dragItem.css('max-height', opt.dragItemInitialHeight+'px');
+      opt.dragItemInitialHeight = opt.dragItem.innerHeight();
+      
+      opt.dragItemInnerSpacing = getInnerSpacing(opt.dragItem.get(0));
+      opt.dragItemOuterSpacing = getOuterSpacing(opt.dragItem.get(0));
+      
+      opt.dragItem.css('max-height', (opt.dragItemInitialHeight-opt.dragItemInnerSpacing.y())+'px');
       setTimeout(function() {
         // If just a click, dragEnd could be called before timeout
         if (!opt.dragItem) {return;}
         // Animate constrained height
-        opt.dragItem.css('max-height', opt.dragItemMaxHeight+'px');
+        opt.dragItem.css('max-height', (opt.dragItemMaxHeight-opt.dragItemInnerSpacing.y())+'px');
       }, 0);
+
+      // Add dragItemTransformStyle
+      if (opt.dragItemTransformStyle) {
+        opt.dragItem.css('transform', opt.dragItemTransformStyle);
+      }
 
       // Auto scroll
       if (opt.scrollDistance)
         opt.scrollIntervalId = setInterval(autoScroll, 50);
 
       // Notify
-      opt.dragStart();
+      opt.dragStart(opt);
     };
 
     var dragMove = function (absolutePosition) {
@@ -163,14 +178,16 @@ License: MIT
 
       // Update values
       var dragItemHeight = Math.min(opt.dragItemInitialHeight, opt.dragItemMaxHeight);
-      var dragItemTop = opt.dragItem.position().top;
-          //console.log(opt.containerScale, dragItemTop);
+      //dragItemHeight += opt.dragItemOuterSpacing.top+opt.dragItemOuterSpacing.bottom;
+      var dragItemTop = opt.containerStartPosition.y;       //(container |
+      dragItemTop += opt.dragItem.position().top;           //(container | top
+      dragItemTop += opt.dragItemOuterSpacing.top;          //(container | top | margin | border)| padding | height | ...
       var dragItemMiddle = dragItemTop+dragItemHeight/2;
 
       // Translate move siblings
       function translateSiblings(prev) {
         var item = opt.dragItem;
-        var itemHeight, itemTop, itemEdge, translateY, hadSortTop;
+        var itemHeight, itemTop, itemEdge, translateY, hadSortTop, itemOuterSpacing;
         opt.dragDeltaTransform.y = 0;
 
         // Loop through siblings in moved direction
@@ -178,21 +195,23 @@ License: MIT
 
           // Vars
           translateY = null;
-          itemHeight = item.height();
+          itemHeight = item.innerHeight();                  // container | top | margin | border |(padding | height)| ...
+          itemOuterSpacing = getOuterSpacing(item.get(0));  // container | top |(margin | border)| padding | height | ...
           hadSortTop = item.data('sortTop');
           itemTop = hadSortTop===undefined?null:hadSortTop*1;
 
           // Save original position of sibling
           if (itemTop===null) {
-            var itemOffset = item.offset();
+            var itemOffset = item.offset();                 //(container | top | margin)| border | padding | height | ...
             item.data('sortTop', (itemTop = itemOffset.top));
           }
 
           // Where to react
-          itemEdge = itemTop
+          itemEdge = itemTop;
           itemEdge+= itemHeight/2; // Get middle
           // Turn on top/bottom (depending on prev) instead of middle, if item is smaller than dragItem OR ALWAYS
           itemEdge+= dragItemHeight/2 *(prev?1:-1) *(itemHeight<dragItemHeight*1.2 ||1)
+          console.log('A', itemEdge, itemTop, itemHeight, dragItemMiddle)
 
           // Figure out correct translation
           if (prev) {
@@ -206,7 +225,9 @@ License: MIT
             opt.dragDeltaTransform.y += itemHeight*(translateY);
 
           // Translate sibling
-          item.css('transform', translateY?'translate3D(0,'+Math.round(translateY*(dragItemHeight+1))+'px,0)':'');
+          var outerSpacingTrans = opt.dragItemOuterSpacing.y();
+          outerSpacingTrans -= translateY<0?itemOuterSpacing.top:itemOuterSpacing.bottom;
+          item.css('transform', translateY?'translate3D(0,'+Math.round(translateY*(dragItemHeight+outerSpacingTrans))+'px,0)':'');
 
           // Update virtual index: (testing item index) (if backwards (prev), go after,
           // otherwise go before) (only if translates, not top & bottom)
@@ -229,10 +250,11 @@ License: MIT
       }
 
       // Transform move dragItem
-      opt.dragItem.css('transform', 'translate3D(0,'+Math.round(p.y)+'px,0)');
+      var additionalTransformValues = (opt.dragItemTransformStyle?' '+opt.dragItemTransformStyle:'');
+      opt.dragItem.css('transform', 'translate3D(0,'+Math.round(p.y)+'px,0)'+additionalTransformValues);
 
       // Notify
-      opt.dragMove();
+      opt.dragMove(opt);
     };
 
     var dragEnd = function () {
@@ -254,8 +276,31 @@ License: MIT
         //opt.container.css('transform-origin', '');
       }
 
+      // Put into place if ordered
+      if (opt.shouldPutIntoPlace) {
+        var additionalTransformValues = (opt.dragItemTransformStyle?' '+opt.dragItemTransformStyle:'');
+        opt.dragItem.css('transform', 'translate3D(0,0px,0)'+additionalTransformValues);
+        opt.dragItem.css('transition', 'none');
+        opt.putIntoPlace(putAnimated);
+        // if (putAnimated) {
+        //   var trans = opt.dragAbsolutePosition.y-opt.dragStartPosition.y;
+        //   trans = 0;
+        //   opt.dragItem.css('transform', 'translate3D(0,'+trans+'px,0)');
+        // }
+      }
+
+      var spaceBeforeY = 0, prevMarginY = 0;
+      opt.dragItem.prevAll(opt.itemSelector).each(function(idx, elm) {
+        var styles = getComputedStyleValues(elm);
+        var mTop = styles("margin-top");
+        var mBottom = styles("margin-bottom");
+        spaceBeforeY += Math.max(prevMarginY, mTop);
+        spaceBeforeY += $(elm).outerHeight();
+        prevMarginY = mBottom;
+      })
+      spaceBeforeY += Math.max(prevMarginY, opt.dragItemOuterSpacing.top);
+
       // Reset siblings transform
-      //opt.dragItem.css('transform', '');
       opt.container.children(opt.itemSelector).each(function (index,item) {
         item = $(item);
         item.removeData('sortTop');
@@ -266,16 +311,17 @@ License: MIT
 
         // Else, if animated and dragItem, set relative transform
         } else {
-          var trans = opt.dragAbsolutePosition.y-opt.dragStartPosition.y+opt.dragDeltaTransform.y;
-          item.css('transform', 'translate3D(0,'+trans+'px,0)');
+          var itemAbsPosInContainerY = opt.dragAbsolutePosition.y-opt.containerStartPosition.y-opt.handleMargin.y;
+          var trans = itemAbsPosInContainerY-spaceBeforeY;
+
+          var additionalTransformValues = (opt.dragItemTransformStyle?' '+opt.dragItemTransformStyle:'');
+          item.css('transform', 'translate3D(0,'+trans+'px,0)'+additionalTransformValues);
+          setTimeout(function () {
+            item.css('transition', '');
+          }, 1)
         }
 
       });
-
-      // Put into place if ordered
-      if (opt.shouldPutIntoPlace) {
-        opt.putIntoPlace(putAnimated);
-      }
 
       // Remove height constraint
       if (!putAnimated) {
@@ -285,7 +331,7 @@ License: MIT
         setTimeout(function(dragItem, height) {
           dragItem.css('max-height', height+'px');
           dragItem.css('transform', '');
-        }, 0, opt.dragItem, opt.dragItemInitialHeight);
+        }, 10, opt.dragItem, opt.dragItemInitialHeight);
         setTimeout(function(dragItem) {
           dragItem.css('max-height', '');
           dragItem.removeClass('putting-into-place');
@@ -297,7 +343,7 @@ License: MIT
 
           var scrollDelta = {x:0,y:0};
           var scrollContainerEdge = getScrollContainerInsideEdge();
-          var edgeMargin = (scrollContainerEdge.bottom-scrollContainerEdge.top)*0.1;
+          var edgeMargin = (scrollContainerEdge.bottom-scrollContainerEdge.top)*0.15;
 
           // Get item's new position
           var pos = {x:0,y:0};
@@ -326,7 +372,7 @@ License: MIT
       }
 
       // Notify
-      opt.dragEnd(opt.dragItem, opt.dragItemOriginalIndex, opt.dragItemVirtualIndex);
+      opt.dragEnd(opt, opt.dragItem, opt.dragItemOriginalIndex, opt.dragItemVirtualIndex);
       opt.dragItem = null;
       opt.dragItemVirtualIndex = null;
     };
@@ -335,9 +381,10 @@ License: MIT
     // Functions
 
     function getScrollContainerInsideEdge() {
+      var top = opt.scrollContainerPosition.y+opt.scrollOffset.y; 
       return {
-        top:opt.scrollContainerPosition.y+opt.scrollOffset.y,
-        bottom:opt.scrollContainerPosition.y+opt.scrollContainerSize.h+opt.scrollOffset.y
+        top:top,
+        bottom:top+opt.scrollContainerSize.h
       }
     }
 
@@ -453,6 +500,61 @@ License: MIT
       return offset;
     }
 
+    // Use eg.: var el = document.body
+    // getComputedStyleValue(el)("margin-left") -> 10
+    function getComputedStyleValues(el) {
+      var getPropertyValue;
+      if (document.defaultView && document.defaultView.getComputedStyle) {
+        var styles = document.defaultView.getComputedStyle(el, "");
+        getPropertyValue = function (prop) {
+          return styles.getPropertyValue(prop);
+        };
+      } else if (el.currentStyle) {
+        getPropertyValue = function (prop) {
+          prop = prop.replace(/\-(\w)/g, function (match, group1) {
+            return group1.toUpperCase();
+          });
+          return el.currentStyle[prop];
+        };
+      } else return console.log("In getComputedStyleValue: No browser support");
+
+      return function (prop) {
+        var val = getPropertyValue(prop);
+        var matches = val.match(/^([\d\.]+)(px|s|ms|em)?$/);
+        if (matches&&matches[1]!==undefined) {
+          val = parseFloat(matches[1], 10)
+          if (matches[2]=="em") {
+            console.log("Use of em in getComputedStyleValue(",el,property,"), multiplying with 16");
+            val *= 16;
+          }
+        }
+        return val;
+      };
+    }
+
+    function getOuterSpacing(el) {
+      var ret = {left:0,right:0,top:0,bottom:0};
+      ret.y = function(){return this.top+this.bottom;};
+      ret.x = function(){return this.left+this.right;};
+      if (!el) return ret;
+      var styles = getComputedStyleValues(el);
+      ret.top    = styles('margin-top')    + styles('border-top-width'); 
+      ret.bottom = styles('margin-bottom') + styles('border-bottom-width');
+      ret.left   = styles('margin-left')   + styles('border-left-width'); 
+      ret.right  = styles('margin-right')  + styles('border-right-width');
+      return ret;
+    }
+    function getInnerSpacing(el) {
+      var ret = getOuterSpacing();
+      if (!el) return ret;
+      var styles = getComputedStyleValues(el);
+      ret.top    = styles('padding-top');
+      ret.bottom = styles('padding-bottom');
+      ret.left   = styles('padding-left');
+      ret.right  = styles('padding-right');
+      return ret;
+    }
+
     function getItemFromHandle(p) {
 
       // Drag handle is inside
@@ -515,7 +617,7 @@ License: MIT
     opt.iDragEnd = dragEnd;
     opt.iDragMove = dragMove;
 
-    opt.didInit();
+    opt.didInit(opt);
 
     // Done
 
