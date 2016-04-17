@@ -22,6 +22,13 @@ $('ul').smoothSort({
 6. Profit.
 
 
+## Real-world example
+
+![Smooth drag and drop list reordering](readme_ex1.gif "Real-world example of smoothSort.js from ludu.co")
+
+*At [ludu.co](https://www.ludu.co), we use smoothSort.js to enable restructuring of lesson content with ease.*
+
+
 ## Features
 
 - Adds drag-n-drop sorting functionality

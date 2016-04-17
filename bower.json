@@ -23,6 +23,7 @@
   "license": "MIT",
   "ignore": [
     "**/.*",
-    "demo.html"
+    "demo.html",
+    "readme_ex1.gif"
   ]
 }
