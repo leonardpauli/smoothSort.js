@@ -148,13 +148,14 @@ License: MIT
         // On animation, Safari assumes a default max-height of 0. We do not want animate that.
         // Preserve other transition values to not interfere with opt.dragItemClass animations
         var transition = getComputedStyleValues(opt.dragItem.get(0))('transition');
-        transition = transition.replace(/(,? ?)(max-height [\.\d\w\s]+)(,? ?)/i, function (all,c1,m,c2) {
+        transition = transition.replace(/(,? ?)(max-height [\w\s\.]+([\w-]+\([\w\s\.,]+\))?[\w\s\.]*)(,? ?)/i, function (all,c1,m,es,c2) {
+          return c1+"max-height 0s"+c2;
           return c1.length && c2.length ? c1 : "";
         });
         if (!transition.length) transition = "none";
         opt.dragItem.css('transition', transition);
         setTimeout(function() {
-
+  
           // Animate from initial height
           opt.dragItem.css('max-height', dragItemBareHeight+'px');
   
@@ -165,10 +166,10 @@ License: MIT
   
               // Animate to constrained height
               opt.dragItem.css('max-height', dragItemBareHeightLimited+'px');
-              console.log('ds');
+
             }, 10);
-          }, 0);
-        }, 0);
+          }, 10);
+        }, 10);
       })();
 
       // Add dragItemTransformStyle
