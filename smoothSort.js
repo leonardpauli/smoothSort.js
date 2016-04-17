@@ -1,23 +1,14 @@
 /* smoothSort.js
 Adds smooth drag-n-drop sorting to any HTML list with a simple call.
-Currently requires jQuery, and some css.
+Currently requires jQuery.
 
 Originally created by Leonard Pauli
 Copyright © Leonard Pauli 2015-2016
 
 Date: 17/3-2015
 Rework: 20/2-2016
+Now: 17/4-2016
 License: MIT
-*/
-
-/* Todo:
- - When scaled, height-scaledHeight... get top offset and use
- - Rework away jQuery dependency.
- - Bower
- - Ember..?
- - Possible padding issue when applied to scrollContainer, affecting switch edge
- - If initial drag is faster then next item move animation, next item could
-   get a somewhat off "initial position" value (used for switch edge)
 */
 
 /* Usage:
@@ -68,9 +59,10 @@ License: MIT
       dragItemTransformStyle:null, // null | 'scale(1.05,1.05)' (appended to 'translate3D(...) ')
       handleSelector:'.handle',
       shouldPutIntoPlace:'animated', // true | false | 'animated'
-      cssResetAnimationDelay:700, // if you got css like
-      // li.putting-into-place {transition:max-height 700ms, transform 0.23s ease-out;}
-      // then set to longest duration (in this case 700ms)
+      cssResetAnimationDelay:500, // if you got css like
+      shouldAddDefaultCSS:'auto', // false | true | 'auto' (true if item's css transition value is the default "all 0s ease 0s")
+      // li.putting-into-place {transition:max-height 500ms, transform 0.23s ease-out;}
+      // then set to longest duration (in this case 500ms)
 
       // Events
       dragStart:function (opt) {},
@@ -107,32 +99,40 @@ License: MIT
     // Events
 
     var dragStart = function (dragItem, p) {
-      opt.dragItem = dragItem;
-      opt.dragStartPosition = {x:p.x,y:p.y};
-      opt.dragAbsolutePosition = {x:p.x,y:p.y};
-      opt.dragDeltaTransform = {x:0,y:0};
+
+      opt.dragItem              = dragItem;
+      opt.dragStartPosition     = {x:p.x,y:p.y};
+      opt.dragAbsolutePosition  = {x:p.x,y:p.y};
+      opt.dragDeltaTransform    = {x:0,y:0};
       opt.dragItemOriginalIndex = getItemIndex(opt.dragItem);
 
+      // Add drag-active classes
       opt.container.addClass(opt.dragActiveClass);
       opt.dragItem.addClass(opt.dragItemClass);
+      
+      addDefaultCssForList(opt.shouldAddDefaultCSS);
  
       // Update values
       opt.scrollOffset.x = opt.scrollContainer.scrollLeft();
       opt.scrollOffset.y = opt.scrollContainer.scrollTop();
 
-      var containerOffset = opt.scrollContainer.offset() || {top:0,left:0};
-      opt.scrollContainerPosition.x = containerOffset.left;
-      opt.scrollContainerPosition.y = containerOffset.top;
-      opt.scrollContainerSize.w = opt.scrollContainer.width();
-      opt.scrollContainerSize.h = opt.scrollContainer.height();
-      var windowHeight = window.innerHeight || document.documentElement.clientHeight;
-      opt.scrollContainerSize.h = Math.min(opt.scrollContainerSize.h, windowHeight - opt.scrollContainerPosition.y);
+      var containerOffset             = opt.scrollContainer.offset() || {top:0,left:0};
+      opt.scrollContainerPosition.x   = containerOffset.left;
+      opt.scrollContainerPosition.y   = containerOffset.top;
+      opt.scrollContainerSize.w       = opt.scrollContainer.width();
+      opt.scrollContainerSize.h       = opt.scrollContainer.height();
+      var windowHeight                = window.innerHeight || document.documentElement.clientHeight;
+      opt.scrollContainerSize.h       = Math.min(opt.scrollContainerSize.h, windowHeight - opt.scrollContainerPosition.y); // TODO - max or min?
       
-      containerOffset = opt.container.offset(); // Non-jQuery: getOffsetToParent(opt.container.get(0), opt.scrollContainer.get(0)).x/.y
-      opt.containerStartPosition.x = containerOffset.left;
-      opt.containerStartPosition.y = containerOffset.top;
-      opt.containerStartSize.w = opt.container.width();
-      opt.containerStartSize.h = opt.container.height();
+      containerOffset                 = opt.container.offset(); // Non-jQuery: getOffsetToParent(opt.container.get(0), opt.scrollContainer.get(0)).x/.y
+      opt.containerStartPosition.x    = containerOffset.left;
+      opt.containerStartPosition.y    = containerOffset.top;
+      opt.containerStartSize.w        = opt.container.width();
+      opt.containerStartSize.h        = opt.container.height();
+      
+      opt.dragItemInitialHeight       = opt.dragItem.innerHeight();
+      opt.dragItemInnerSpacing        = getInnerSpacing(opt.dragItem.get(0));
+      opt.dragItemOuterSpacing        = getOuterSpacing(opt.dragItem.get(0));
 
       // Transform scale
       if (opt.containerScale!==1&&opt.containerScale!==false) {
@@ -140,27 +140,43 @@ License: MIT
         opt.container.css('transform', 'scale('+opt.containerScale+', '+opt.containerScale+')');
       }
 
-      // Constrain dragItem height
-      opt.dragItemInitialHeight = opt.dragItem.innerHeight();
-      
-      opt.dragItemInnerSpacing = getInnerSpacing(opt.dragItem.get(0));
-      opt.dragItemOuterSpacing = getOuterSpacing(opt.dragItem.get(0));
-      
-      opt.dragItem.css('max-height', (opt.dragItemInitialHeight-opt.dragItemInnerSpacing.y())+'px');
-      setTimeout(function() {
-        // If just a click, dragEnd could be called before timeout
-        if (!opt.dragItem) {return;}
-        // Animate constrained height
-        opt.dragItem.css('max-height', (opt.dragItemMaxHeight-opt.dragItemInnerSpacing.y())+'px');
-      }, 0);
+      // Constrain dragItem height animated
+      (function constrainDragItemToMaxHeight() {
+        var dragItemBareHeight          = opt.dragItemInitialHeight -opt.dragItemInnerSpacing.y();
+        var dragItemBareHeightLimited   = opt.dragItemMaxHeight     -opt.dragItemInnerSpacing.y();
+  
+        // On animation, Safari assumes a default max-height of 0. We do not want animate that.
+        // Preserve other transition values to not interfere with opt.dragItemClass animations
+        var transition = getComputedStyleValues(opt.dragItem.get(0))('transition');
+        transition = transition.replace(/(,? ?)(max-height [\.\d\w\s]+)(,? ?)/i, function (all,c1,m,c2) {
+          return c1.length && c2.length ? c1 : "";
+        });
+        if (!transition.length) transition = "none";
+        opt.dragItem.css('transition', transition);
+        setTimeout(function() {
+
+          // Animate from initial height
+          opt.dragItem.css('max-height', dragItemBareHeight+'px');
+  
+          setTimeout(function() {
+            opt.dragItem.css('transition', '');
+            setTimeout(function() {
+              if (!opt.dragItem) {return;} // If just a click, dragEnd could be called before timeout
+  
+              // Animate to constrained height
+              opt.dragItem.css('max-height', dragItemBareHeightLimited+'px');
+              console.log('ds');
+            }, 10);
+          }, 0);
+        }, 0);
+      })();
 
       // Add dragItemTransformStyle
-      if (opt.dragItemTransformStyle) {
+      if (opt.dragItemTransformStyle)
         opt.dragItem.css('transform', opt.dragItemTransformStyle);
-      }
 
       // Auto scroll
-      if (opt.scrollDistance)
+      if (opt.scrollDistance) 
         opt.scrollIntervalId = setInterval(autoScroll, 50);
 
       // Notify
@@ -168,49 +184,56 @@ License: MIT
     };
 
     var dragMove = function (absolutePosition) {
-      opt.dragAbsolutePosition.x = absolutePosition.x;
-      opt.dragAbsolutePosition.y = Math.min(absolutePosition.y, opt.containerStartSize.h-opt.dragItemInitialHeight+opt.handleMargin.y+opt.containerStartPosition.y);
-      opt.dragAbsolutePosition.y = Math.max(opt.dragAbsolutePosition.y, opt.scrollContainerPosition.y+opt.handleMargin.y+opt.containerStartPosition.y);
 
-      var p = {};
-      p.x = opt.dragAbsolutePosition.x-opt.dragStartPosition.x;
-      p.y = opt.dragAbsolutePosition.y-opt.dragStartPosition.y;
+      // Limit dragItem's absolute position to container bounds
+      var dragLimit     = {max:{x:0,y:0}, min:{x:0,y:0}};
+      dragLimit.max.y   = opt.containerStartPosition.y + opt.containerStartSize.h; // container bottom position
+      dragLimit.max.y  -= opt.dragItemInitialHeight - opt.handleMargin.y; // minus height of dragItem from drag position
+      dragLimit.min.y   = opt.scrollContainerPosition.y+opt.containerStartPosition.y +opt.handleMargin.y;
+
+      opt.dragAbsolutePosition.x = absolutePosition.x;
+      opt.dragAbsolutePosition.y = Math.max(dragLimit.min.y, Math.min(absolutePosition.y, dragLimit.max.y));
+
+      // Calculate delta
+      var p   = {x:0,y:0};
+      p.x     = opt.dragAbsolutePosition.x  -opt.dragStartPosition.x;
+      p.y     = opt.dragAbsolutePosition.y  -opt.dragStartPosition.y;
 
       // Update values
-      var dragItemHeight = Math.min(opt.dragItemInitialHeight, opt.dragItemMaxHeight);
-      //dragItemHeight += opt.dragItemOuterSpacing.top+opt.dragItemOuterSpacing.bottom;
-      var dragItemTop = opt.containerStartPosition.y;       //(container |
-      dragItemTop += opt.dragItem.position().top;           //(container | top
-      dragItemTop += opt.dragItemOuterSpacing.top;          //(container | top | margin | border)| padding | height | ...
-      var dragItemMiddle = dragItemTop+dragItemHeight/2;
+      var dragItemHeight    = Math.min(opt.dragItemInitialHeight, opt.dragItemMaxHeight);
+      var dragItemTop       = opt.containerStartPosition.y; //(container |
+      dragItemTop          += opt.dragItem.position().top;  //(container | top
+      dragItemTop          += opt.dragItemOuterSpacing.top; //(container | top | margin | border)| padding | height | ...
+      var dragItemMiddle    = dragItemTop+dragItemHeight/2; //(container | top | margin | border | padding | hei)ht | ...
 
       // Translate move siblings
       function translateSiblings(prev) {
         var item = opt.dragItem;
-        var itemHeight, itemTop, itemEdge, translateY, hadSortTop, itemOuterSpacing;
+        var itemHeight, itemTop, itemEdge, translateY, itemOuterSpacing;
         opt.dragDeltaTransform.y = 0;
 
         // Loop through siblings in moved direction
         while ((item = prev?item.prev(opt.itemSelector):item.next(opt.itemSelector)).length) {
 
           // Vars
-          translateY = null;
-          itemHeight = item.innerHeight();                  // container | top | margin | border |(padding | height)| ...
-          itemOuterSpacing = getOuterSpacing(item.get(0));  // container | top |(margin | border)| padding | height | ...
-          hadSortTop = item.data('sortTop');
-          itemTop = hadSortTop===undefined?null:hadSortTop*1;
+          translateY        = null;
+          itemHeight        = item.innerHeight();           // container | top | margin | border |(padding | height)| ...
+          itemOuterSpacing  = getOuterSpacing(item.get(0)); // container | top |(margin | border)| padding | height | ...
+          itemTop           = item.data('sortTop');
 
           // Save original position of sibling
-          if (itemTop===null) {
+          if (itemTop===undefined) {
             var itemOffset = item.offset();                 //(container | top | margin)| border | padding | height | ...
             item.data('sortTop', (itemTop = itemOffset.top));
           }
 
           // Where to react
-          itemEdge = itemTop;
-          itemEdge+= itemHeight/2; // Get middle
+          itemEdge  = itemTop;
+          itemEdge += itemHeight/2; // Get middle
+          itemEdge += dragItemHeight/2 *(prev?1:-1); // Turn on top/bottom (depending on prev)
+
           // Turn on top/bottom (depending on prev) instead of middle, if item is smaller than dragItem OR ALWAYS
-          itemEdge+= dragItemHeight/2 *(prev?1:-1) *(itemHeight<dragItemHeight*1.2 ||1)
+          // itemEdge+= dragItemHeight/2 *(prev?1:-1) *(itemHeight<dragItemHeight*1.2 ||1)
 
           // Figure out correct translation
           if (prev) {
@@ -218,6 +241,7 @@ License: MIT
           } else {
             translateY = dragItemMiddle > itemEdge ? -1 : null;
           }
+          //translateY=null;
 
           // Save "delta" for later
           if (translateY)
@@ -225,8 +249,9 @@ License: MIT
 
           // Translate sibling
           var outerSpacingTrans = opt.dragItemOuterSpacing.y();
-          outerSpacingTrans -= translateY<0?itemOuterSpacing.top:itemOuterSpacing.bottom;
-          item.css('transform', translateY?'translate3D(0,'+Math.round(translateY*(dragItemHeight+outerSpacingTrans))+'px,0)':'');
+          outerSpacingTrans    -= translateY<0 ? itemOuterSpacing.top:itemOuterSpacing.bottom;
+          var itemTransY        = Math.round(translateY*(dragItemHeight+outerSpacingTrans));
+          item.css('transform', translateY?'translate3D(0,'+itemTransY+'px,0)':'');
 
           // Update virtual index: (testing item index) (if backwards (prev), go after,
           // otherwise go before) (only if translates, not top & bottom)
@@ -275,19 +300,16 @@ License: MIT
         //opt.container.css('transform-origin', '');
       }
 
-      // Put into place if ordered
+      // Put into place
       if (opt.shouldPutIntoPlace) {
         var additionalTransformValues = (opt.dragItemTransformStyle?' '+opt.dragItemTransformStyle:'');
         opt.dragItem.css('transform', 'translate3D(0,0px,0)'+additionalTransformValues);
         opt.dragItem.css('transition', 'none');
+
         opt.putIntoPlace(putAnimated);
-        // if (putAnimated) {
-        //   var trans = opt.dragAbsolutePosition.y-opt.dragStartPosition.y;
-        //   trans = 0;
-        //   opt.dragItem.css('transform', 'translate3D(0,'+trans+'px,0)');
-        // }
       }
 
+      // Calculate the space before dragItem's new position (new abs pos)
       var spaceBeforeY = 0, prevMarginY = 0;
       opt.dragItem.prevAll(opt.itemSelector).each(function(idx, elm) {
         var styles = getComputedStyleValues(elm);
@@ -311,7 +333,7 @@ License: MIT
         // Else, if animated and dragItem, set relative transform
         } else {
           var itemAbsPosInContainerY = opt.dragAbsolutePosition.y-opt.containerStartPosition.y-opt.handleMargin.y;
-          var trans = itemAbsPosInContainerY-spaceBeforeY;
+          var trans = itemAbsPosInContainerY-spaceBeforeY; // trans so visual pos still same after dom change
 
           var additionalTransformValues = (opt.dragItemTransformStyle?' '+opt.dragItemTransformStyle:'');
           item.css('transform', 'translate3D(0,'+trans+'px,0)'+additionalTransformValues);
@@ -319,7 +341,6 @@ License: MIT
             item.css('transition', '');
           }, 1)
         }
-
       });
 
       // Remove height constraint
@@ -332,42 +353,15 @@ License: MIT
           dragItem.css('transform', '');
         }, 10, opt.dragItem, opt.dragItemInitialHeight);
         setTimeout(function(dragItem) {
+          dragItem.css('transition', 'none'); // Safari assumes max-height animation to 0, not nice.
           dragItem.css('max-height', '');
-          dragItem.removeClass('putting-into-place');
+          setTimeout(function(dragItem) {
+            dragItem.css('transition', '');
+            dragItem.removeClass('putting-into-place');
+          }, 0, dragItem);
         }, opt.cssResetAnimationDelay, opt.dragItem);
 
-        // Scroll item visible if put out of vision
-        (function scrollItemIntoViewAnimated(duration) {
-          if (duration===false) return;
-
-          var scrollDelta = {x:0,y:0};
-          var scrollContainerEdge = getScrollContainerInsideEdge();
-          var edgeMargin = (scrollContainerEdge.bottom-scrollContainerEdge.top)*0.15;
-
-          // Get item's new position
-          var pos = {x:0,y:0};
-          pos.y  = opt.dragAbsolutePosition.y-opt.dragStartPosition.y+opt.dragDeltaTransform.y;
-          pos.y -= opt.dragAbsolutePosition.y;
-          pos.y += opt.handleMargin.y;//+opt.containerStartPosition.y
-          pos.y *= -1;
-
-          // Get altered scrollOffset
-          if ((scrollDelta.y = scrollContainerEdge.top-pos.y )>0)
-            opt.scrollOffset.y -= scrollDelta.y + edgeMargin;
-          else if ((scrollDelta.y = pos.y+opt.dragItemInitialHeight-scrollContainerEdge.bottom )>0)
-            opt.scrollOffset.y += scrollDelta.y + edgeMargin;
-          
-          // Do the scrolling animation
-          if (scrollDelta.y>0) {
-            // Get scrollingElement (.animate scrollTop doesn't
-            // work on document, but document.scrollingElement)
-            var scrollingElement = opt.scrollContainer.get(0).scrollingElement;
-            scrollingElement = (typeof scrollingElement === "object")?$(scrollingElement):opt.scrollContainer;
-            scrollingElement.animate({
-              scrollTop: opt.scrollOffset.y
-            }, duration);9
-          }
-        })(opt.scrollIntoViewDuration);
+        scrollDragItemIntoViewAnimated(opt.scrollIntoViewDuration);
       }
 
       // Notify
@@ -429,6 +423,36 @@ License: MIT
       });
     }
 
+    // Scroll item visible if put out of vision
+    function scrollDragItemIntoViewAnimated(duration) {
+
+      var scrollDeltaAbs      = {x:0,y:0};
+      var scrollContainerEdge = getScrollContainerInsideEdge();
+      var edgeMargin          = (scrollContainerEdge.bottom-scrollContainerEdge.top)*0.15;
+
+      // Get item's new position
+      var pos = {x:0,y:0};
+      pos.y   = opt.dragStartPosition.y -opt.dragDeltaTransform.y -opt.handleMargin.y;
+
+      // Get altered scrollOffset
+      if ((scrollDeltaAbs.y = scrollContainerEdge.top-pos.y )>0)
+        opt.scrollOffset.y -= scrollDeltaAbs.y + edgeMargin;
+      else if ((scrollDeltaAbs.y = pos.y+opt.dragItemInitialHeight-scrollContainerEdge.bottom )>0)
+        opt.scrollOffset.y += scrollDeltaAbs.y + edgeMargin;
+      
+      // Only do the scrolling animation if necessary
+      if (scrollDeltaAbs.y<=0)
+        return;
+
+      // Get scrollingElement (.animate scrollTop doesn't
+      // work on document, but document.scrollingElement)
+      var scrollingElement = opt.scrollContainer.get(0).scrollingElement;
+      scrollingElement = (typeof scrollingElement === "object") ? $(scrollingElement):opt.scrollContainer;
+      scrollingElement.animate({
+        scrollTop: opt.scrollOffset.y
+      }, duration);
+    }
+
     // Returns the item's index in the list of items (a subset of
     // opt.container's children defined by the opt.itemSelector).
     // Usually the same as item.index(), but sometimes different.
@@ -463,6 +487,44 @@ License: MIT
       } else {
         opt.dragItem.insertAfter(children[toIndex-(toIndex<fromIndex?1:0)]);
       }
+    }
+
+    function addDefaultCssForList(should) {
+      if (!should) {return;}
+      if (should=='auto') {
+        var anItem = opt.container.get(0).querySelector(opt.itemSelector);
+        var value = getComputedStyleValues(anItem)('transition')
+        if (value && value != "all 0s ease 0s") return;
+      }
+      if (opt.containerDefaultStyleClass) {return;}
+      
+      opt.containerDefaultStyleClass = 'smoothSortDefaultStyle'+Math.round(Math.random()*1000);
+      opt.container.addClass(opt.containerDefaultStyleClass);
+
+      var cssTxt = "";
+      cssTxt += "UL LI {position:relative;transition:maxHeightTrans;}";
+      cssTxt += "UL.DRAG-ACTIVE LI:not(.MOVING) {transition:transformTrans;}";
+      cssTxt += "UL LI.MOVING {z-index:100;overflow-y:hidden;}";
+      cssTxt += "UL LI.PUTTING-INTO-PLACE {z-index:100;transition:maxHeightTrans, transformTrans;}";
+      cssTxt += "UL LI HANDLE {cursor:-webkit-grab;cursor:grab;}";
+      cssTxt += "UL LI HANDLE:active, UL LI.MOVING HANDLE {cursor:-webkit-grabbing;cursor:grabbing;}";
+    
+      cssTxt = cssTxt.replace(/UL/g, "."+opt.containerDefaultStyleClass);
+      cssTxt = cssTxt.replace(/LI/g, opt.itemSelector);
+      cssTxt = cssTxt.replace(/MOVING/g, opt.dragItemClass);
+      cssTxt = cssTxt.replace(/DRAG-ACTIVE/g, opt.dragActiveClass);
+      cssTxt = cssTxt.replace(/PUTTING-INTO-PLACE/g, 'putting-into-place');
+      cssTxt = cssTxt.replace(/HANDLE/g, opt.handleSelector);
+
+      var maxHeightTrans = "max-height "+Math.round(opt.cssResetAnimationDelay)+"ms";
+      cssTxt = cssTxt.replace(/maxHeightTrans/g, maxHeightTrans);
+      var transformTrans = "transform "+Math.round(opt.cssResetAnimationDelay*0.55)+"ms ease-out";
+      cssTxt = cssTxt.replace(/transformTrans/g, transformTrans);
+      
+      var head = $('head');
+      if (!head) {return console.log("smoothSort addDefaultCssForList: No head?");}
+    
+      head.prepend('<style>'+cssTxt+'</style>');
     }
 
 
