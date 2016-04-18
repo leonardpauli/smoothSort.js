@@ -89,6 +89,7 @@ License: MIT
 
     opt.containerStartPosition  = { x:0, y:0 };
     opt.containerStartSize      = { w:0, h:0 };
+    opt.containerTranslate      = { x:0, y:0 };
 
     opt.scrollOffset            = { x:0, y:0 };
     opt.scrollContainerPosition = { x:0, y:0 };
@@ -135,9 +136,12 @@ License: MIT
       opt.dragItemOuterSpacing        = getOuterSpacing(opt.dragItem.get(0));
 
       // Transform scale
-      if (opt.containerScale!==1&&opt.containerScale!==false) {
-        opt.container.css('transform-origin', 'center '+opt.dragStartPosition.y+'px');
-        opt.container.css('transform', 'scale('+opt.containerScale+', '+opt.containerScale+')');
+      if (opt.containerScale===false) {opt.containerScale = 1;}
+      var toPos = opt.dragStartPosition.y-opt.containerStartPosition.y;
+      opt.containerTranslate.y = toPos * (1-opt.containerScale);
+      if (opt.containerScale!==1) {
+        opt.container.css('transform-origin', 'center top');
+        opt.container.css('transform', 'translate3d(0,'+opt.containerTranslate.y+'px,0) scale('+opt.containerScale+')');
       }
 
       // Constrain dragItem height animated
@@ -187,10 +191,14 @@ License: MIT
     var dragMove = function (absolutePosition) {
 
       // Limit dragItem's absolute position to container bounds
-      var dragLimit     = {max:{x:0,y:0}, min:{x:0,y:0}};
-      dragLimit.max.y   = opt.containerStartPosition.y + opt.containerStartSize.h; // container bottom position
-      dragLimit.max.y  -= opt.dragItemInitialHeight - opt.handleMargin.y; // minus height of dragItem from drag position
-      dragLimit.min.y   = opt.scrollContainerPosition.y+opt.containerStartPosition.y +opt.handleMargin.y;
+      var dragLimit     = {min:{x:0,y:0}, max:{x:0,y:0}};
+      dragLimit.min.y   = opt.scrollContainerPosition.y+opt.containerStartPosition.y;
+      dragLimit.min.y  += opt.handleMargin.y*opt.containerScale;
+      dragLimit.min.y  += opt.containerTranslate.y;
+      dragLimit.max.y   = opt.containerStartPosition.y;
+      dragLimit.max.y  += opt.containerStartSize.h*opt.containerScale; // container bottom position
+      dragLimit.max.y  += opt.containerTranslate.y; // vv minus height of dragItem from drag position
+      dragLimit.max.y  -= (opt.dragItemInitialHeight - opt.handleMargin.y)*opt.containerScale;
 
       opt.dragAbsolutePosition.x = absolutePosition.x;
       opt.dragAbsolutePosition.y = Math.max(dragLimit.min.y, Math.min(absolutePosition.y, dragLimit.max.y));
@@ -205,6 +213,7 @@ License: MIT
       var dragItemTop       = opt.containerStartPosition.y; //(container |
       dragItemTop          += opt.dragItem.position().top;  //(container | top
       dragItemTop          += opt.dragItemOuterSpacing.top; //(container | top | margin | border)| padding | height | ...
+      dragItemTop          += opt.containerTranslate.y;
       var dragItemMiddle    = dragItemTop+dragItemHeight/2; //(container | top | margin | border | padding | hei)ht | ...
 
       // Translate move siblings
@@ -269,10 +278,8 @@ License: MIT
         translateSiblings(p.y<0);
 
       // Take scale into account
-      if (opt.containerScale!==1&&opt.containerScale!==false) {
-        p.x /= opt.containerScale;
-        p.y /= opt.containerScale;
-      }
+      p.x /= opt.containerScale;
+      p.y /= opt.containerScale;
 
       // Transform move dragItem
       var additionalTransformValues = (opt.dragItemTransformStyle?' '+opt.dragItemTransformStyle:'');
@@ -400,7 +407,7 @@ License: MIT
 
       // If insideScrollZone.bottom
       if (insideScrollZone.bottom>0) {
-        if (opt.scrollContainerSize.h+opt.scrollOffset.y<opt.containerStartSize.h*opt.containerScale)
+        if (opt.scrollContainerSize.h+opt.scrollOffset.y<opt.containerStartSize.h*opt.containerScale+300)
           scrollDelta.y = scrollDeltaFromScrollDistance(insideScrollZone.bottom);
 
       // Or if insideScrollZone.top
@@ -438,9 +445,9 @@ License: MIT
       // Get altered scrollOffset
       if ((scrollDeltaAbs.y = scrollContainerEdge.top-pos.y )>0)
         opt.scrollOffset.y -= scrollDeltaAbs.y + edgeMargin;
-      else if ((scrollDeltaAbs.y = pos.y+opt.dragItemInitialHeight-scrollContainerEdge.bottom )>0)
+      else if ((scrollDeltaAbs.y = pos.y+opt.dragItemInitialHeight-scrollContainerEdge.bottom)>0)
         opt.scrollOffset.y += scrollDeltaAbs.y + edgeMargin;
-      
+
       // Only do the scrolling animation if necessary
       if (scrollDeltaAbs.y<=0)
         return;

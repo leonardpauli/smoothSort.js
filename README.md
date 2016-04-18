@@ -107,33 +107,65 @@ In event handlers, especially the following could be useful:
 
 ## Todo
 
+*Next up*
+
+- Auto scroll edge and animate put back new translate offset
 - Make containerScale work properly (When scaled, height-scaledHeight... get top offset and use)
-- Rework away jQuery dependency.
-- As an ember plugin?
-- As an angular plugin?
-- Possible padding issue when applied to scrollContainer, affecting switch edge
 - If initial drag is faster then next item move animation, next item could get a somewhat off "initial position" value (used for switch edge)
-- When should switch happen? Isn't perfect yet. (Search "// Where to react")
+- Make sure autoscroll bottom works in Ludu
+- Scroll area bottom not working in some cases (Search "opt.scrollContainerSize.h       =")
+- dragStart x2 to fast after eachother yeilds unwanted animation+no maxheight (dragStart1, dragStart2, dragEnd1, ...), "reset" object if dragEnd not done before next dragStart
+
+
+- Possible padding issue when applied to scrollContainer, affecting switch edge
 - Move other items istead of dragItem when released if possible
-- Improved default css
+- When should switch happen? Isn't perfect yet. (Search "// Where to react")
+- Account for the velocity when releasing dragItem (mainly, change putBack transition speed (by reading and alter getComputedStyleValues maybe, or separate opt?) so initial is same as just before release (account for the easing as well))
+- Allow drag outside container, but with rubber band effect (option)
+
+- Separate "opt" objects (one for every list) and functionality (only one)
+- Ability to remove smoothSort functionality (also remove defaultStyle if existing)
+- Isolate set-an-item's-translate-position into a separate function
+
+- Improved default css (+no reset should be needed if value not wanted, ex. opacity is a maybe -> skip it)
 - If no handler specified, use the whole item (except buttons etc?) instead?
-- jQuery scroll animation somewhat laggy in safari
+- Add default style on init (how to check item's style if there's none?)? (and remove if smoothSort functionality is removed)
+
 - Browser support
 - Touch support
-- Scroll area bottom not working in some cases (Search "opt.scrollContainerSize.h       =")
-- Separate "opt" objects (one for every list) and functionality (only one)
+- jQuery scroll animation somewhat laggy in safari (translate the whole container instead..?)
+- Check out HTML5 drag 'n' drop, pros > cons?
+- Rework away jQuery dependency.
+
+- option to have containerScale opposite origin also centered
+- option to have scrollDistance 'center': scroll percentage based so that dragPos/visible continer area height = scrollPos / scroll container height, what if initial drag pos and scroll pos does not equal the previus formula? Morph until they do?
+
 - Add horizontal support
 - Grid support (Horizontal + vertical)
+- Auto-detect direction [horizontal | vertical | both] based on (container width not auto, but height auto -> vertical, etc) or (compare item1 and item2 position, if multiple and grid, figure out -"the item order"- when/where to switch)
+- Better and horizontal gifs in the readme!
+
 - Drag 'n' drop between lists (boolean options, allow: drag, drop, reorder)
-- Add ability to wrap item content so custom transform transitions (like scale) don't mess with dragItem's translate3d
-- Ability to remove smoothSort functionality (also remove defaultStyle if existing)
-- Play with addEventListener('webkitmouseforcechanged', (e) => {e.webkitForce}?
-- Add default style on init (how to check item's style if there's none?)?
-- Check out HTML5 drag 'n' drop, pros > cons?
+- If about to drop into list, use function (as option) to evaluate if allow (shouldAcceptDropFromOtherList: function (opt, otherOpt, otherItem) {return opt.container.hasClass("recepieList");})
+- If drag out of/into list, option snapDistance, snapEffect none | translate/transition (rubberband effect?).. use a css class? .moving-into-list, moving-out-of-list, outside-list with transition?
+- Play with addEventListener('webkitmouseforcechanged', (e) => {e.webkitForce}? Usefull to alter snapDistance (light: snaps easy, longer distance, hard: snaps harder, shorter distanse)..?
+
+- Add ability to wrap item's content so custom transform transitions (like scale) don't mess with dragItem's translate3d (the right way? maybe instead allow to use a js animation plugin and manualy animate custom properties while keeping translate3d based on drag delta)
+
+- As an ember plugin?
+- As an angular plugin?
+- React js module?
 - Fix gh-pages page
 - Fix demo page
 - Add .min.js
+- Add badges
+- Add tests
 - Promote
+
+- Add commercial license if possible and unintrusive
+- Demo, take something from a list and throw it into a "3d"basket (one part over, and one under), take velocity into account
+- Demo: Absolute positioned items on a curve. options isAboutToUpdatePosition(opt, item, pos) -> pos ?
+
 
 ---
 

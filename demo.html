@@ -25,9 +25,8 @@
     
       width:80%;
       background:#444;
-      margin:60px 0;
+      margin:300px 0;
       margin-left: 10%;
-      float: left;
     }
     
     ul.drag-active {
@@ -77,10 +76,12 @@
 
 <script>
 // Create list items
-for (var i = 14; i; i--) {
+for (var i = 34; i; i--) {
   var h = Math.round(Math.random()*300)+50;h=i%2==0?60:120;
   var c = 'rgb(255,'+Math.round(17+(255-17)/16*(16-i))+','+Math.round(17+(255-17)/30*i)+')';
-  h = i%2?100:30;c=i%2?"#ddd":"#eee";
+  
+  h = i%2?150:30;
+  c=i%2?"#ddd":"#eee";
 
   $('<li>text<b class=handle>handle '+i+'</b></li>')
   .css('height', h+'px').css('background', c)
@@ -94,6 +95,10 @@ $('#ul').smoothSort({
   scrollDistance:100, // distance from top/bottom of scrollContainer, to activate autoScroll
   scrollSpeed:15,
   cssResetAnimationDelay:500,
+  dragStart: function (opt) {
+    var c = 'rgb(255,'+Math.round(17+(255-17)*Math.random())+','+Math.round(17+(255-17)*Math.random())+')';
+    opt.dragItem.css('background-color', c)
+  },
   dragEnd: function (item, fromIndex, toIndex) {
     //console.log('Drag ended!', item, fromIndex, toIndex)
   }
