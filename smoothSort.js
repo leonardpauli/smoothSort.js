@@ -117,7 +117,13 @@ License: MIT
       opt.scrollOffset.x = opt.scrollContainer.scrollLeft();
       opt.scrollOffset.y = opt.scrollContainer.scrollTop();
 
-      var containerOffset             = opt.scrollContainer.offset() || {top:0,left:0};
+      var containerOffset;
+      try {
+        containerOffset = opt.scrollContainer.offset() || { top: 0, left: 0 };
+      } catch (err) {
+        containerOffset = { top: 0, left: 0 };
+      }
+      
       opt.scrollContainerPosition.x   = containerOffset.left;
       opt.scrollContainerPosition.y   = containerOffset.top;
       opt.scrollContainerSize.w       = opt.scrollContainer.width();
