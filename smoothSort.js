@@ -39,8 +39,9 @@ License: MIT
   3. Profit.
 */
 
-(function ($) {
+;(function ($) {
   'use strict';
+  if (!$) return; // abort if jQuery isn't available, for now
 
   $.fn.smoothSort = function(options) {
 
@@ -698,4 +699,4 @@ License: MIT
 
     return this;
   };
-}(jQuery));
+}(typeof jQuery !== 'undefined'? jQuery: null ));
